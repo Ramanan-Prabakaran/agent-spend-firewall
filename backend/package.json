@@ -1,0 +1,43 @@
+{
+  "name": "ai-spend-firewall-backend",
+  "version": "1.0.0",
+  "description": "AI Agent Spend Firewall — backend",
+  "main": "dist/index.js",
+  "scripts": {
+    "build": "tsc",
+    "seed": "ts-node --transpile-only src/scripts/seed.ts",
+    "proof": "ts-node --transpile-only src/scripts/paypal-proof.ts",
+    "golden-path": "ts-node --transpile-only src/scripts/run-golden-path.ts",
+    "test:groq": "ts-node --transpile-only src/scripts/groq-test.ts",
+    "dev": "ts-node-dev --respawn --transpile-only src/index.ts",
+    "start": "node dist/index.js",
+    "test": "jest --forceExit"
+  },
+  "dependencies": {
+    "@paypal/paypal-server-sdk": "^2.5.0",
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.5",
+    "express": "^4.19.2",
+    "openai": "^4.47.1",
+    "sql.js": "^1.12.0",
+    "zod": "^3.23.8"
+  },
+  "devDependencies": {
+    "@types/cors": "^2.8.17",
+    "@types/express": "^4.17.21",
+    "@types/jest": "^29.5.12",
+    "@types/node": "^20.14.2",
+    "@types/sql.js": "^1.4.11",
+    "jest": "^29.7.0",
+    "ts-jest": "^29.1.5",
+    "ts-node-dev": "^2.0.0",
+    "typescript": "^5.4.5"
+  },
+  "jest": {
+    "preset": "ts-jest",
+    "testEnvironment": "node",
+    "testMatch": [
+      "**/__tests__/**/*.test.ts"
+    ]
+  }
+}
