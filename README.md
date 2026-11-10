@@ -65,9 +65,9 @@ flowchart TD
 | **Prompt Injection Risk** | `injectionScore >= 0.60` | Adversarial prompt injections, hidden comments, or jailbreak overrides | **BLOCK** |
 | **Quantity Safety Ceiling** | `qty > 10 units` | Unauthorized bulk purchasing or inventory hoarding attacks | **BLOCK** |
 | **Spend Safety Ceiling** | `totalUsd > $500.00 USD` | Single-order budget exhaustion or catastrophic loss | **BLOCK** |
-| **Price Deviation Limit** | `|proposed - requested| > 30%` | Price gouging, hidden surcharges, or bait-and-switch pricing | **BLOCK** |
+| **Price Deviation Limit** | `abs(proposed - requested) / requested > 30%` | Price gouging, hidden surcharges, or bait-and-switch pricing | **BLOCK** |
 | **Shipping Address Allowlist** | Address not in authorized allowlist | Delivery diversion attacks and drop-shipping fraud | **BLOCK** |
-| **Arithmetic Integrity** | `|total - (qty * unitPrice)| > $0.05` | Numeric hallucinations, rounding manipulation, or hidden fees | **BLOCK** |
+| **Arithmetic Integrity** | `abs(total - (qty * unitPrice)) > 0.05` | Numeric hallucinations, rounding manipulation, or hidden fees | **BLOCK** |
 
 ---
 
@@ -78,8 +78,9 @@ Before running the project locally, ensure you have:
 1. **Node.js**: `v18.0.0` or higher (`v20+` recommended).
 2. **Groq API Key**: Free API key from [Groq Console](https://console.groq.com/keys) (powers fast structured inference via `openai/gpt-oss-120b`).
 3. **PayPal Developer Sandbox Accounts**:
-   - One **US-based Business Account**: Generates `PAYPAL_CLIENT_ID` and `PAYPAL_CLIENT_SECRET` in the [PayPal Developer Dashboard](https://developer.paypal.com/dashboard/applications/sandbox).
-   - One **US-based Personal Account**: Used to log in as the buyer at `https://www.sandbox.paypal.com` during checkout testing.
+   - One **US-based Business Account** (seller): Generates `PAYPAL_CLIENT_ID` and `PAYPAL_CLIENT_SECRET` in the [PayPal Developer Dashboard](https://developer.paypal.com/dashboard/applications/sandbox).
+   - One **US-country Personal Account** (buyer): Used to log in at `https://www.sandbox.paypal.com` during checkout testing.
+   - *Important Note*: Avoid using India-based (`IN`) personal sandbox accounts for testing. PayPal discontinued domestic INR processing for Indian accounts in 2021, and attempting checkout with an India-based buyer against a USD order triggers the PayPal error `"This seller doesn't accept payments in your currency"`. Both seller and buyer accounts must be configured with country `US`.
 
 ---
 
@@ -87,8 +88,8 @@ Before running the project locally, ensure you have:
 
 ### 1. Clone the repository
 ```bash
-git clone https://github.com/your-username/ai-agent-spend-firewall.git
-cd ai-agent-spend-firewall
+git clone https://github.com/Ramanan-Prabakaran/agent-spend-firewall.git
+cd agent-spend-firewall
 ```
 
 ### 2. Configure Environment Variables
@@ -96,7 +97,7 @@ Copy the example environment configuration into `backend/.env`:
 ```bash
 cp .env.example backend/.env
 ```
-Open `backend/.env` and provide your sandbox credentials and Groq API key:
+Open `backend/.env` and provide your sandbox credentials, Groq API key, and policy thresholds:
 ```env
 PAYPAL_CLIENT_ID=your_sandbox_business_client_id
 PAYPAL_CLIENT_SECRET=your_sandbox_business_client_secret
@@ -104,6 +105,7 @@ GROQ_API_KEY=your_groq_api_key
 GROQ_MODEL=openai/gpt-oss-120b
 PORT=3001
 FRONTEND_URL=http://localhost:5173
+ALLOWED_SHIPPING_ADDRESSES=registered delivery address,default shipping address,corporate office,authorized warehouse,primary address
 ```
 
 ### 3. Install Dependencies
@@ -114,11 +116,7 @@ npm install --prefix backend
 npm install --prefix frontend
 ```
 
-### 4. Build and Start the Application
-Build both projects:
-```bash
-npm run build
-```
+### 4. Start the Application
 Start backend and frontend concurrently with a single command:
 ```bash
 npm run dev
@@ -155,16 +153,19 @@ Open your browser at **`http://localhost:5173`**.
    -->
    ```
 3. Click **"Run through firewall"**.
-4. The AI analysis engine flags the manipulation attempt (`injection_score: 1.00`) and reports specific indicators:
+4. The AI analysis engine normalizes the genuine item (1 unit @ $29.99), flags the manipulation attempt with an adversarial score of `1.00 / 1.00` (threshold `0.60`), and reports specific indicators:
    - `ignore requested quantity`
    - `change quantity to 50`
    - `divert shipment address`
-5. The deterministic engine evaluates the policy rules and triggers multiple hard blocks:
-   - ❌ Injection score 1.00 $\ge$ 0.60
-   - ❌ Quantity 50 exceeds ceiling of 10
-   - ❌ Total spend $1,499.50 exceeds ceiling of $500.00
-   - ❌ Shipping address "123 Hacker Lane" rejected by allowlist
-6. The screen displays a prominent red **`VERDICT: BLOCKED`** banner and highlights every failed rule.
+   - `suppress user alert`
+5. The deterministic firewall evaluates the policy rules and halts the transaction immediately on Rule 1:
+   - ❌ **Prompt Injection & Manipulation**: `FAIL` (Injection score 1.00 $\ge$ threshold 0.60 — suspicious prompt injection or manipulation detected in source text.)
+   - ✅ **Quantity Safety Ceiling**: `PASS` (Quantity: 1 unit within safe ceiling of 10)
+   - ✅ **Spend Safety Ceiling**: `PASS` (Total: $29.99 within ceiling of $500.00)
+   - ✅ **Price Deviation Limit**: `PASS` (Deviation: 0.0% within threshold of 30%)
+   - ✅ **Shipping Address Allowlist**: `PASS` (Default address check passed)
+   - ✅ **Arithmetic Integrity**: `PASS` (1 × $29.99 = $29.99 verified)
+6. The screen displays a prominent red **`VERDICT: BLOCKED`** banner and highlights the failed injection rule.
 7. **Notice: `🔒 PayPal was NEVER called. No sandbox order was initialized or charged.`**
 8. The payment button is completely hidden. Any direct API attempt to call `create-order` or `capture-order` for this decision returns `403 Forbidden`.
 
@@ -198,7 +199,7 @@ The test suite covers:
 This project is built with security and honesty at its core. Current known limitations include:
 
 1. **Adversarial Detection Surface**: The prompt injection detection has been tested against explicit imperative attacks, indirect review injections, and system prompt overrides. Highly subtle, linguistic, or multi-turn conversational injections may score lower.
-2. **Sandbox Environment**: The PayPal integration is designed and certified for the PayPal Developer Sandbox. Production deployment requires live PayPal app review, client credentials, and webhooks.
+2. **Sandbox Environment**: The PayPal integration is designed and built and tested against the PayPal Sandbox. Production deployment requires live PayPal app review, client credentials, and webhooks.
 3. **Static Address Allowlist**: In this reference implementation, the shipping address allowlist is configured via an environment variable list. An enterprise deployment would integrate with a dynamic company directory or KYC address verification API.
 4. **Single-Model Extraction**: The normalization step currently relies on a single high-speed LLM call (`openai/gpt-oss-120b`). Production architectures could employ multi-model consensus voting for even greater defense-in-depth.
 
@@ -217,4 +218,3 @@ This project is built with security and honesty at its core. Current known limit
 ## License
 
 [MIT](LICENSE) © 2026 Ramanan Prabakaran
-
