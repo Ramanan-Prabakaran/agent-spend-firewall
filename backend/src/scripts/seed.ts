@@ -4,10 +4,13 @@ import dotenv from 'dotenv';
 dotenv.config({ path: path.join(__dirname, '../../../backend/.env') });
 dotenv.config({ path: path.join(__dirname, '../../../../.env') });
 
-import { getDb, persistDb } from '../db/database';
+import { getDb, initDb, persistDb } from '../db/database';
 
 async function main() {
   try {
+    // Ensure table exists even in a fresh installation
+    await initDb();
+
     const db = await getDb();
     db.run('DELETE FROM decision_log;');
     db.run('VACUUM;');
